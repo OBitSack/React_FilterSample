@@ -10,15 +10,20 @@ const App: React.FC = () => {
   const [filters, setFilters] = useState<SearchParams>({})
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [currentPage, setCurrentPage] = useState<number>(1)
-  const [rowsPerPage, setRowsPerPage] = useState<number>(5)
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10)
+
+  type FilterSchema = {
+    [K in keyof Schema]?: Schema[K] extends (infer U)[] ? U[] : Schema[K]
+  }
 
   const handleFilterChange = (field: keyof Schema, value: any) => {
     setFilters((prev) => {
-      const updatedFilters = { ...prev }
+      const updatedFilters: FilterSchema = { ...prev }
       if (Array.isArray(updatedFilters[field])) {
-        const newValue = updatedFilters[field]?.includes(value)
-          ? updatedFilters[field].filter((v: any) => v !== value)
-          : [...(updatedFilters[field] || []), value]
+        const currentField = updatedFilters[field] as any[]
+        const newValue = currentField?.includes(value)
+          ? currentField.filter((v) => v !== value)
+          : [...(currentField || []), value]
         updatedFilters[field] = newValue.length ? newValue : undefined
       } else {
         updatedFilters[field] = value
@@ -33,33 +38,42 @@ const App: React.FC = () => {
   }
 
   const filteredData = data
-    .filter((item) => {
+    .filter((item: any) => {
       return Object.keys(filters).every((key) => {
-        const filterValue = filters[key]
-        console.log('Filtering item:', item, 'with filter:', key, filterValue)
+        const filterKey = key as keyof Schema
+        const filterValue = filters[filterKey]
+
+        console.log(
+          'Filtering item:',
+          item,
+          'with filter:',
+          filterKey,
+          filterValue
+        )
+
         if (filterValue === undefined || filterValue === null) {
           return true // No filter applied, show all data
         }
         if (Array.isArray(filterValue)) {
-          if (Array.isArray(item[key as keyof Schema])) {
+          if (Array.isArray(item[filterKey])) {
             return filterValue.some((val) =>
-              (item[key as keyof Schema] as string[]).includes(val as string)
+              (item[filterKey] as (string | boolean | number)[]).includes(val)
             )
           }
-          return filterValue.includes(item[key as keyof Schema])
-        }
-        if (typeof filterValue === 'boolean') {
-          return item[key as keyof Schema] === filterValue
-        }
-        if (Array.isArray(item[key as keyof Schema])) {
-          return (item[key as keyof Schema] as string[]).includes(
-            filterValue as string
+          return (filterValue as (string | boolean | number)[]).includes(
+            item[filterKey] as string | boolean | number
           )
         }
-        return item[key as keyof Schema] === filterValue
+        if (typeof filterValue === 'boolean') {
+          return item[filterKey] === filterValue
+        }
+        if (Array.isArray(item[filterKey])) {
+          return (item[filterKey] as string[]).includes(filterValue as string)
+        }
+        return item[filterKey] === filterValue
       })
     })
-    .filter((item) =>
+    .filter((item: any) =>
       item.name.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
@@ -89,17 +103,24 @@ const App: React.FC = () => {
           placeholder="Search..."
         />
         <DataTable data={paginatedData} />
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          rowsPerPage={rowsPerPage}
-          totalRows={totalRows}
-          onPageChange={setCurrentPage}
-          onRowsPerPageChange={(rows) => {
-            setRowsPerPage(rows)
-            setCurrentPage(1) // Reset to first page on rows per page change
-          }}
-        />
+        <div className="flex items-center justify-between">
+          <div>
+            {filteredData.length} of {data.length} row(s) filtered
+          </div>
+          <div className="w-1/2">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              rowsPerPage={rowsPerPage}
+              totalRows={totalRows}
+              onPageChange={setCurrentPage}
+              onRowsPerPageChange={(rows) => {
+                setRowsPerPage(rows)
+                setCurrentPage(1) // Reset to first page on rows per page change
+              }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   )

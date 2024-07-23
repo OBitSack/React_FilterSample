@@ -26,14 +26,14 @@ const DataTable: React.FC<DataTableProps> = ({ data }) => {
         </tr>
       </thead>
       <tbody>
-        {data.map((item) => (
+        {data.map((item: any) => (
           <tr key={item.name}>
             <td className="py-3 px-4 border-b border-gray-300">{item.name}</td>
             <td className="py-3 px-4 border-b border-gray-300">
               {item.regions.join(', ')}
             </td>
             <td className="py-3 px-4 border-b border-gray-300">
-              {item.tags.map((tag) => (
+              {item.tags.map((tag: any) => (
                 <span
                   key={tag}
                   className={`inline-block px-2 py-1 text-xs font-semibold rounded-full mr-2 ${tagsColor[tag].badge}`}
