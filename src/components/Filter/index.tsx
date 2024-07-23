@@ -104,12 +104,7 @@ const Filter: React.FC<FilterProps> = ({
                 >
                   <input
                     type="checkbox"
-                    onChange={(e) =>
-                      handleChange(
-                        field.value,
-                        e.target.checked ? option.value : null
-                      )
-                    }
+                    onChange={(e) => handleChange(field.value, option.value)}
                     className="form-checkbox h-4 w-4 text-indigo-600 transition duration-150 ease-in-out"
                   />
                   <span className="ml-2 text-gray-600">

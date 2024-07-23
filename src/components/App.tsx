@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+// App.tsx
+import React, { useState, useRef, useEffect } from 'react'
 import Filter from './Filter'
 import DataTable from './DataTable'
 import Pagination from './Pagination'
@@ -6,76 +7,128 @@ import { data, filterFields } from './data'
 import { Schema } from './schema'
 import { SearchParams } from './types'
 
+// Function to extract unique values from the data for a given field
+const getUniqueValues = (field: keyof Schema) => {
+  const values = data
+    .map((item) => item[field])
+    .flat()
+    .filter((value, index, self) => self.indexOf(value) === index)
+  return values
+}
+
 const App: React.FC = () => {
   const [filters, setFilters] = useState<SearchParams>({})
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [currentPage, setCurrentPage] = useState<number>(1)
-  const [rowsPerPage, setRowsPerPage] = useState<number>(10)
-
-  type FilterSchema = {
-    [K in keyof Schema]?: Schema[K] extends (infer U)[] ? U[] : Schema[K]
+  const [rowsPerPage, setRowsPerPage] = useState<number>(5)
+  const [isFocused, setIsFocused] = useState<boolean>(false)
+  const [selectedOption, setSelectedOption] = useState<any>(null)
+  const [filteredData, setFilteredData] = useState<Schema[]>([])
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const categoryOptions: {
+    [key: string]: (string | boolean)[]
+  } = {
+    Public: ['true', 'false'],
+    Active: ['true', 'false'],
+    'School Level': getUniqueValues('regions'),
+    'Subject Area': getUniqueValues('tags')
   }
 
+  const handleSearchChange = (e: any) => {
+    setSearchQuery(e.target.value)
+  }
   const handleFilterChange = (field: keyof Schema, value: any) => {
     setFilters((prev) => {
-      const updatedFilters: FilterSchema = { ...prev }
-      if (Array.isArray(updatedFilters[field])) {
-        const currentField = updatedFilters[field] as any[]
-        const newValue = currentField?.includes(value)
-          ? currentField.filter((v) => v !== value)
-          : [...(currentField || []), value]
-        updatedFilters[field] = newValue.length ? newValue : undefined
+      const updatedFilters: any = { ...prev }
+      const fieldValue = updatedFilters[field]
+
+      if (Array.isArray(fieldValue)) {
+        if (fieldValue.includes(value)) {
+          updatedFilters[field] = fieldValue.filter((v) => v !== value)
+          if ((updatedFilters[field] as (string | boolean)[]).length === 0) {
+            delete updatedFilters[field]
+          }
+        } else {
+          updatedFilters[field] = [...fieldValue, value]
+        }
+      } else if (fieldValue === undefined || fieldValue === null) {
+        updatedFilters[field] = [value]
       } else {
-        updatedFilters[field] = value
+        updatedFilters[field] = [value]
       }
-      console.log('Updated Filters:', updatedFilters)
+
+      return updatedFilters
+    })
+
+    if (searchInputRef.current) {
+      searchInputRef.current.focus()
+    }
+  }
+
+  const clearFilter = (key: keyof Schema) => {
+    setFilters((prev) => {
+      const updatedFilters = { ...prev }
+      delete updatedFilters[key]
       return updatedFilters
     })
   }
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const filterEntries = Object.entries(filters)
+    if (e.key === 'Backspace' && filterEntries.length) {
+      if (filterEntries.length > 0) {
+        const [lastFilterKey] = filterEntries[filterEntries.length - 1]
+        clearFilter(lastFilterKey as keyof Schema)
+        setSelectedOption(null)
+        setIsFocused(true) // Show the category dropdown menu
+      }
+    }
+    console.log('FILTERED', filterEntries)
+  }
+  const fetchFilteredData = async () => {
+    const result = await new Promise<Schema[]>((resolve) => {
+      const filtered = data
+        .filter((item) => {
+          return Object.keys(filters).every((key) => {
+            const filterValue = filters[key]
+            const itemValue = item[key as keyof Schema]
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value)
+            if (filterValue === undefined || filterValue === null) {
+              return true // No filter applied, show all data
+            }
+
+            if (Array.isArray(filterValue)) {
+              if (Array.isArray(itemValue)) {
+                return (itemValue as (string | boolean)[]).some((val) =>
+                  (filterValue as (string | boolean)[]).includes(val)
+                )
+              }
+              return (filterValue as (string | boolean)[]).includes(
+                itemValue as string | boolean
+              )
+            }
+
+            if (typeof filterValue === 'boolean') {
+              return itemValue === filterValue
+            }
+
+            if (typeof filterValue === 'string') {
+              return itemValue === filterValue
+            }
+
+            return false
+          })
+        })
+        .filter((item) =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      resolve(filtered)
+    })
+    setFilteredData(result)
   }
 
-  const filteredData = data
-    .filter((item: any) => {
-      return Object.keys(filters).every((key) => {
-        const filterKey = key as keyof Schema
-        const filterValue = filters[filterKey]
-
-        console.log(
-          'Filtering item:',
-          item,
-          'with filter:',
-          filterKey,
-          filterValue
-        )
-
-        if (filterValue === undefined || filterValue === null) {
-          return true // No filter applied, show all data
-        }
-        if (Array.isArray(filterValue)) {
-          if (Array.isArray(item[filterKey])) {
-            return filterValue.some((val) =>
-              (item[filterKey] as (string | boolean | number)[]).includes(val)
-            )
-          }
-          return (filterValue as (string | boolean | number)[]).includes(
-            item[filterKey] as string | boolean | number
-          )
-        }
-        if (typeof filterValue === 'boolean') {
-          return item[filterKey] === filterValue
-        }
-        if (Array.isArray(item[filterKey])) {
-          return (item[filterKey] as string[]).includes(filterValue as string)
-        }
-        return item[filterKey] === filterValue
-      })
-    })
-    .filter((item: any) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+  useEffect(() => {
+    fetchFilteredData()
+  }, [filters, searchQuery])
 
   const totalRows = filteredData.length
   const totalPages = Math.ceil(totalRows / rowsPerPage)
@@ -83,6 +136,29 @@ const App: React.FC = () => {
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage
   )
+
+  const handleOptionClick = (option: string) => {
+    setSelectedOption(option)
+    setIsFocused(false)
+  }
+  const handleSubOptionClick = (subOption: string | boolean) => {
+    if (selectedOption) {
+      const value =
+        subOption === 'true' ? true : subOption === 'false' ? false : subOption
+      handleFilterChange(
+        selectedOption.toLowerCase().replace(' ', '_') as keyof Schema,
+        value
+      )
+    }
+    setSelectedOption(null)
+    setIsFocused(true) // Keep focus on the input field
+  }
+  const selectedFiltersString = Object.entries(filters)
+    .map(
+      ([key, value]) =>
+        `${key}: ${Array.isArray(value) ? value.join(', ') : value}`
+    )
+    .join(', ')
 
   return (
     <div className="flex min-h-screen bg-gray-100 p-6">
@@ -94,33 +170,60 @@ const App: React.FC = () => {
           selectedFilters={filters}
         />
       </div>
-      <div className="w-2/3 p-4 bg-white shadow-md rounded-lg">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={handleSearchChange}
-          className="mb-4 p-2 border border-gray-300 rounded w-full"
-          placeholder="Search..."
-        />
-        <DataTable data={paginatedData} />
-        <div className="flex items-center justify-between">
-          <div>
-            {filteredData.length} of {data.length} row(s) filtered
-          </div>
-          <div className="w-1/2">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              rowsPerPage={rowsPerPage}
-              totalRows={totalRows}
-              onPageChange={setCurrentPage}
-              onRowsPerPageChange={(rows) => {
-                setRowsPerPage(rows)
-                setCurrentPage(1) // Reset to first page on rows per page change
-              }}
-            />
-          </div>
+      <div className="w-2/3 p-4 bg-white shadow-md rounded-lg relative">
+        <div className="relative">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={selectedFiltersString}
+            onChange={handleSearchChange}
+            onKeyDown={handleKeyDown} // Added this line
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setTimeout(() => setIsFocused(false), 100)} // Delay to allow click
+            className="mb-4 p-2 border border-gray-300 rounded w-full"
+            placeholder="Search..."
+          />
+          {isFocused && !selectedOption && (
+            <div className="absolute z-10 bg-white border border-gray-300 rounded mt-1 w-full">
+              {Object.keys(categoryOptions).map((option) => (
+                <div
+                  key={option}
+                  onClick={() => handleOptionClick(option)}
+                  className="cursor-pointer p-2 hover:bg-gray-100"
+                >
+                  {option}
+                </div>
+              ))}
+            </div>
+          )}
+          {selectedOption && (
+            <div className="absolute z-10 bg-white border border-gray-300 rounded mt-1 w-full transition transition-all duration-300">
+              {categoryOptions[selectedOption].map(
+                (subOption: string | boolean) => (
+                  <div
+                    key={subOption.toString()}
+                    onClick={() => handleSubOptionClick(subOption.toString())}
+                    className="cursor-pointer p-2 hover:bg-gray-100"
+                  >
+                    {subOption}
+                  </div>
+                )
+              )}
+            </div>
+          )}
         </div>
+        <DataTable data={paginatedData} />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          rowsPerPage={rowsPerPage}
+          totalRows={totalRows}
+          onPageChange={setCurrentPage}
+          onRowsPerPageChange={(rows) => {
+            setRowsPerPage(rows)
+            setCurrentPage(1) // Reset to first page on rows per page change
+          }}
+        />
       </div>
     </div>
   )

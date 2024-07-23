@@ -15,16 +15,17 @@ const stringToBoolean = z
   .pipe(z.boolean())
 
 export const schema = z.object({
-  name: z.string().or(z.string().array()).optional(),
-  public: stringToBoolean.or(stringToBoolean.array()).optional(),
-  active: stringToBoolean.or(stringToBoolean.array()).optional(),
+  name: z.string().optional(),
+  public: z.union([z.boolean(), z.boolean().array()]).optional(),
+  active: z.union([z.boolean(), z.boolean().array()]).optional(),
   regions: z
-    .enum(['HS', 'MS', 'ES'])
-    .or(z.enum(['HS', 'MS', 'ES']).array())
+    .union([z.enum(['HS', 'MS', 'ES']), z.enum(['HS', 'MS', 'ES']).array()])
     .optional(),
   tags: z
-    .enum(['math', 'science', 'literature', 'history'])
-    .or(z.enum(['math', 'science', 'literature', 'history']).array())
+    .union([
+      z.enum(['math', 'science', 'literature', 'history']),
+      z.enum(['math', 'science', 'literature', 'history']).array()
+    ])
     .optional()
 })
 
